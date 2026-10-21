@@ -1,0 +1,88 @@
+use std::{fs, path::Path};
+
+pub struct KeyBind {
+    pub key: String,
+    pub command: String,
+}
+
+pub struct Setting {
+    pub keybinds: Vec<KeyBind>,
+}
+
+impl Setting {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path = path.as_ref();
+        let content = fs::read_to_string(path)
+            .map_err(|err| format!("Read config file fail ({}): {err}", path.display()))?;
+
+        let keybinds = content
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .map(|(i, line)| -> Result<KeyBind, String> {
+                let (key, command) = line
+                    .split_once(':')
+                    .ok_or_else(|| format!("config file format error, line ({}): {line}", i + 1))?;
+
+                Ok(KeyBind {
+                    key: key.trim().to_string(),
+                    command: command.trim().to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self { keybinds })
+    }
+
+    pub fn default_new() -> Result<Self, String> {
+        Self::new("conf.km")
+    }
+
+    pub fn is_match(&self, key: &str) -> bool {
+        self.keybinds.iter().any(|k| k.key == key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::*;
+    use std::{fs, io, path::PathBuf};
+
+    fn create_temp(content: &str) -> Result<(TempDir, PathBuf), io::Error> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("conf.km");
+
+        fs::write(&path, content)?;
+        Ok((dir, path))
+    }
+
+    #[test]
+    fn test_new() {
+        let (_dir, path) = create_temp("ab: echo hello\n\ndb: echo world").unwrap();
+        let setting = Setting::new(&path).unwrap();
+
+        assert_eq!(setting.keybinds.len(), 2);
+        assert_eq!(setting.keybinds[0].key, "ab");
+        assert_eq!(setting.keybinds[0].command, "echo hello");
+        assert_eq!(setting.keybinds[1].command, "echo world");
+    }
+
+    #[test]
+    fn test_new_format_error() {
+        let (_dir, path) = create_temp("ab echo hello").unwrap();
+
+        let error = Setting::new(&path).err().expect("expect error but got ok");
+
+        assert_eq!(error, "config file format error, line (1): ab echo hello");
+    }
+
+    #[test]
+    fn test_is_match() {
+        let (_dir, path) = create_temp("ab: echo hello").unwrap();
+        let setting = Setting::new(&path).unwrap();
+        assert!(setting.is_match("ab"));
+        assert!(!setting.is_match("cc"));
+    }
+}
