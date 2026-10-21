@@ -9,7 +9,7 @@ pub fn listener<F: FnMut(libc::input_event) -> bool>(mut f: F) -> Result<(), io:
     loop {
         file.read_exact(&mut buffer)?;
         let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
-        if ev.type_ != 1 {
+        if !(ev.type_ == 1 && ev.value == 1) {
             continue;
         }
         let exit = f(ev);

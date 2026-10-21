@@ -5,20 +5,17 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error>> {
     let stg = Setting::default_new()?;
 
-    keyboard::listener(|ev| match ev.code {
-        1 => {
-            println!("exit");
-            true
-        }
-        45 => {
-            println!("x");
-            false
-        }
+    keyboard::listener(|ev| {
+        let Some(k) = keyboard::key_name(ev.code) else {
+            return false;
+        };
+        println!("{k}");
 
-        _ => {
-            println!("not x");
-            false
-        }
+        let Some(kb) = stg.get(k) else {
+            return false;
+        };
+
+        false
     })?;
     Ok(())
 }

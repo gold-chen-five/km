@@ -38,8 +38,8 @@ impl Setting {
         Self::new("conf.km")
     }
 
-    pub fn is_match(&self, key: &str) -> bool {
-        self.keybinds.iter().any(|k| k.key == key)
+    pub fn get(&self, key: &str) -> Option<&KeyBind> {
+        self.keybinds.iter().find(|k| k.key == key)
     }
 }
 
@@ -79,10 +79,11 @@ mod tests {
     }
 
     #[test]
-    fn test_is_match() {
+    fn test_get() {
         let (_dir, path) = create_temp("ab: echo hello").unwrap();
         let setting = Setting::new(&path).unwrap();
-        assert!(setting.is_match("ab"));
-        assert!(!setting.is_match("cc"));
+        let kb = setting.get("ab").expect("should have value");
+        assert_eq!(kb.key, "ab");
+        assert_eq!(kb.command, "echo hello");
     }
 }
