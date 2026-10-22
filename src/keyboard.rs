@@ -7,7 +7,7 @@ const KEY_PRESS: i32 = 1;
 // const KEY_REPEAT: i32 = 2;
 const EV_KEY: u16 = 0x01;
 
-pub fn listener<F: FnMut(libc::input_event) -> bool>(mut f: F) -> Result<(), io::Error> {
+pub fn listener<F: FnMut(libc::input_event)>(mut f: F) -> Result<(), io::Error> {
     let mut file = File::open("/dev/input/event3")?;
     let mut buffer = [0u8; size_of::<libc::input_event>()];
 
@@ -17,10 +17,8 @@ pub fn listener<F: FnMut(libc::input_event) -> bool>(mut f: F) -> Result<(), io:
         if !(ev.type_ == EV_KEY && ev.value == KEY_PRESS) {
             continue;
         }
-        let exit = f(ev);
-        if exit {
-            return Ok(());
-        }
+        f(ev);
+        return Ok(());
     }
 }
 

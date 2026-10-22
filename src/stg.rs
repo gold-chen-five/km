@@ -3,6 +3,7 @@ use std::{fs, path::Path};
 pub struct KeyBind {
     pub key: String,
     pub command: String,
+    pub args: Option<Vec<String>>,
 }
 
 pub struct Setting {
@@ -20,13 +21,25 @@ impl Setting {
             .enumerate()
             .filter(|(_, line)| !line.trim().is_empty())
             .map(|(i, line)| -> Result<KeyBind, String> {
-                let (key, command) = line
+                let (key, value) = line
                     .split_once(':')
                     .ok_or_else(|| format!("config file format error, line ({}): {line}", i + 1))?;
 
+                let key = key.trim();
+                let value = value.trim();
+
+                let (command, args) = value.split_once(' ').map_or_else(
+                    || (value.to_string(), None),
+                    |(cmd, args)| {
+                        let args = args.split_whitespace().map(str::to_owned).collect();
+                        (cmd.to_string(), Some(args))
+                    },
+                );
+
                 Ok(KeyBind {
-                    key: key.trim().to_string(),
-                    command: command.trim().to_string(),
+                    key: key.to_string(),
+                    command,
+                    args,
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
