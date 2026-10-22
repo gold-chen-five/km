@@ -2,6 +2,11 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::mem::size_of;
 
+// const KEY_RELEASE: i32 = 0;
+const KEY_PRESS: i32 = 1;
+// const KEY_REPEAT: i32 = 2;
+const EV_KEY: u16 = 0x01;
+
 pub fn listener<F: FnMut(libc::input_event) -> bool>(mut f: F) -> Result<(), io::Error> {
     let mut file = File::open("/dev/input/event3")?;
     let mut buffer = [0u8; size_of::<libc::input_event>()];
@@ -9,7 +14,7 @@ pub fn listener<F: FnMut(libc::input_event) -> bool>(mut f: F) -> Result<(), io:
     loop {
         file.read_exact(&mut buffer)?;
         let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
-        if !(ev.type_ == 1 && ev.value == 1) {
+        if !(ev.type_ == EV_KEY && ev.value == KEY_PRESS) {
             continue;
         }
         let exit = f(ev);

@@ -1,1 +1,6 @@
-jj: cat conf.km
+// <Ctrl>, <>this mean hold 
+// <Ctrl>j: hold ctrl + j
+
+// jj, mean quick click on jj below 0.3 second
+
+j: cat conf.km

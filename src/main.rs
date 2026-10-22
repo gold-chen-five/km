@@ -9,13 +9,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         let Some(k) = keyboard::key_name(ev.code) else {
             return false;
         };
-        println!("{k}");
 
         let Some(kb) = stg.get(k) else {
             return false;
         };
 
+        println!("{}", kb.command);
         false
     })?;
+
     Ok(())
 }
