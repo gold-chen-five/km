@@ -18,8 +18,9 @@ pub fn listener<F: FnMut(libc::input_event)>(mut f: F) -> Result<(), io::Error> 
             continue;
         }
         f(ev);
-        return Ok(());
     }
+
+    Ok(())
 }
 
 // this follow <https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h>
