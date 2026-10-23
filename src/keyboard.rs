@@ -8,7 +8,7 @@ const KEY_PRESS: i32 = 1;
 const EV_KEY: u16 = 0x01;
 
 pub fn listener<F: FnMut(libc::input_event)>(mut f: F) -> Result<(), io::Error> {
-    let mut file = File::open("/dev/input/event3")?;
+    let mut file = File::open("/dev/input/event4")?; // Need to fix by kb find
     let mut buffer = [0u8; size_of::<libc::input_event>()];
 
     loop {
