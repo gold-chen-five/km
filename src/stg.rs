@@ -78,8 +78,9 @@ mod tests {
 
         assert_eq!(setting.keybinds.len(), 2);
         assert_eq!(setting.keybinds[0].key, "ab");
-        assert_eq!(setting.keybinds[0].command, "echo hello");
-        assert_eq!(setting.keybinds[1].command, "echo world");
+        assert_eq!(setting.keybinds[0].command, "echo");
+        assert_eq!(setting.keybinds[0].args, Some(vec!["hello".to_string()]));
+        assert_eq!(setting.keybinds[1].command, "echo");
     }
 
     #[test]
@@ -97,6 +98,6 @@ mod tests {
         let setting = Setting::new(&path).unwrap();
         let kb = setting.get("ab").expect("should have value");
         assert_eq!(kb.key, "ab");
-        assert_eq!(kb.command, "echo hello");
+        assert_eq!(kb.command, "echo");
     }
 }
