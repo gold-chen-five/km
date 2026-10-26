@@ -5,6 +5,8 @@ use std::io::{self, Read};
 use std::mem::size_of;
 use std::time::{Duration, Instant};
 
+const KEYBOARD_SIZE: usize = 125;
+
 struct Sequence {
     key: String,
     prev_press: Instant,
@@ -25,13 +27,15 @@ impl Sequence {
 
 pub struct Keyboard {
     sequence: Sequence,
+    holding_table: [bool; KEYBOARD_SIZE],
 }
 
 impl Keyboard {
-    // const KEY_RELEASE: i3 = 0;
-    const KEY_PRESS: i32 = 1;
-    // const KEY_REPEAT: i32 = 2;
     const EV_KEY: u16 = 0x01;
+
+    const KEY_RELEASE: i32 = 0;
+    const KEY_PRESS: i32 = 1;
+    const KEY_REPEAT: i32 = 2;
 
     pub fn new(sequence_timeout: Duration) -> Self {
         Self {
@@ -40,6 +44,7 @@ impl Keyboard {
                 prev_press: Instant::now(),
                 timeout: sequence_timeout,
             },
+            holding_table: [false; KEYBOARD_SIZE],
         }
     }
 
@@ -51,7 +56,14 @@ impl Keyboard {
         loop {
             file.read_exact(&mut buffer)?;
             let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
-            if !(ev.type_ == Self::EV_KEY && ev.value == Self::KEY_PRESS) {
+
+            println!("ev.value: {}", ev.value);
+
+            if ev.type_ != Self::EV_KEY {
+                continue;
+            }
+
+            if ev.value != Self::KEY_PRESS || ev.value != Self::KEY_REPEAT {
                 continue;
             }
 
@@ -59,7 +71,27 @@ impl Keyboard {
                 continue;
             };
 
-            let key = self.sequence.push(k);
+            let Some(key) = (match ev.value {
+                Self::KEY_RELEASE => {
+                    self.holding_table[ev.code] = false;
+                    None
+                }
+                Self::KEY_PRESS => {
+                    if self.holding_table[ev.code] {
+                        continue;
+                    }
+
+                    let k = self.sequence.push(k);
+                    Some(k.to_string())
+                }
+                Self::KEY_REPEAT => {
+                    let k = self.sequence.push(k);
+                    Some(format!("{key}+"))
+                }
+            }) else {
+                continue;
+            };
+
             let Some(kb) = stg.get(&key) else {
                 continue;
             };
