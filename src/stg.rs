@@ -54,6 +54,23 @@ impl Setting {
     pub fn get(&self, key: &str) -> Option<&KeyBind> {
         self.keybinds.iter().find(|k| k.key == key)
     }
+
+    pub fn get_hold(&self, hold_text: &[String], key: &str) -> Option<&KeyBind> {
+        self.keybinds.iter().find(|k| {
+            let parts: Vec<_> = k.key.split('+').collect();
+
+            let Some((last_key, holds)) = parts.split_last() else {
+                return false;
+            };
+
+            if holds.len() != hold_text.len() {
+                return false;
+            }
+
+            let all_in_holds = hold_text.iter().all(|item| holds.contains(&item.as_str()));
+            all_in_holds && *last_key == key
+        })
+    }
 }
 
 #[cfg(test)]

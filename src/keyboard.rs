@@ -1,7 +1,7 @@
 use crate::stg::{KeyBind, Setting};
 use std::error::Error;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::mem::size_of;
 use std::time::{Duration, Instant};
 
@@ -28,6 +28,7 @@ impl Sequence {
 pub struct Keyboard {
     sequence: Sequence,
     holding_table: [bool; KEYBOARD_SIZE],
+    hold_text: Vec<String>,
 }
 
 impl Keyboard {
@@ -45,11 +46,12 @@ impl Keyboard {
                 timeout: sequence_timeout,
             },
             holding_table: [false; KEYBOARD_SIZE],
+            hold_text: Vec::new(),
         }
     }
 
     pub fn listener<F: FnMut(&KeyBind)>(&mut self, mut f: F) -> Result<(), Box<dyn Error>> {
-        let mut file = File::open("/dev/input/event4")?; // Need to fix by kb find
+        let mut file = File::open("/dev/input/event3")?; // Need to fix by kb find
         let mut buffer = [0u8; size_of::<libc::input_event>()];
         let stg = Setting::default_new()?;
 
@@ -57,13 +59,13 @@ impl Keyboard {
             file.read_exact(&mut buffer)?;
             let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
 
-            println!("ev.value: {}", ev.value);
+            // println!("ev.value: {}", ev.value);
 
             if ev.type_ != Self::EV_KEY {
                 continue;
             }
 
-            if ev.value != Self::KEY_PRESS || ev.value != Self::KEY_REPEAT {
+            if ev.value != Self::KEY_PRESS && ev.value != Self::KEY_REPEAT {
                 continue;
             }
 
@@ -73,34 +75,53 @@ impl Keyboard {
 
             let Some(key) = (match ev.value {
                 Self::KEY_RELEASE => {
-                    self.holding_table[ev.code] = false;
+                    self.holding_table[usize::from(ev.code)] = false;
                     None
                 }
                 Self::KEY_PRESS => {
-                    if self.holding_table[ev.code] {
+                    if let Some(holding) = self.holding_table.get(usize::from(ev.code))
+                        && *holding
+                    {
                         continue;
                     }
-
                     let k = self.sequence.push(k);
                     Some(k.to_string())
                 }
                 Self::KEY_REPEAT => {
-                    let k = self.sequence.push(k);
-                    Some(format!("{key}+"))
+                    if let Some(holding) = self.holding_table.get(usize::from(ev.code))
+                        && *holding
+                    {
+                        continue;
+                    }
+                    if let Some(h) = self.holding_table.get_mut(usize::from(ev.code)) {
+                        *h = true;
+                    } else {
+                        continue;
+                    }
+
+                    self.hold_text.push(k.to_string());
+                    None
                 }
+                _ => None,
             }) else {
                 continue;
             };
 
-            let Some(kb) = stg.get(&key) else {
-                continue;
+            let kb = if self.hold_text.is_empty() {
+                let Some(kb) = stg.get(&key) else {
+                    continue;
+                };
+                kb
+            } else {
+                let Some(kb) = stg.get_hold(&self.hold_text, &key) else {
+                    continue;
+                };
+                kb
             };
 
             f(kb);
             self.sequence.key.clear();
         }
-
-        Ok(())
     }
 
     // this follow <https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h>
