@@ -53,74 +53,72 @@ impl Keyboard {
     pub fn listener<F: FnMut(&KeyBind)>(&mut self, mut f: F) -> Result<(), Box<dyn Error>> {
         let mut file = File::open("/dev/input/event3")?; // Need to fix by kb find
         let mut buffer = [0u8; size_of::<libc::input_event>()];
-        let stg = Setting::default_new()?;
 
         loop {
             file.read_exact(&mut buffer)?;
             let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
 
-            // println!("ev.value: {}", ev.value);
-
-            if ev.type_ != Self::EV_KEY {
-                continue;
-            }
-
-            if ev.value != Self::KEY_PRESS && ev.value != Self::KEY_REPEAT {
-                continue;
-            }
-
-            let Some(k) = self.key_name(ev.code) else {
-                continue;
-            };
-
-            let Some(key) = (match ev.value {
-                Self::KEY_RELEASE => {
-                    self.holding_table[usize::from(ev.code)] = false;
-                    None
-                }
-                Self::KEY_PRESS => {
-                    if let Some(holding) = self.holding_table.get(usize::from(ev.code))
-                        && *holding
-                    {
-                        continue;
-                    }
-                    let k = self.sequence.push(k);
-                    Some(k.to_string())
-                }
-                Self::KEY_REPEAT => {
-                    if let Some(holding) = self.holding_table.get(usize::from(ev.code))
-                        && *holding
-                    {
-                        continue;
-                    }
-                    if let Some(h) = self.holding_table.get_mut(usize::from(ev.code)) {
-                        *h = true;
-                    } else {
-                        continue;
-                    }
-
-                    self.hold_text.push(k.to_string());
-                    None
-                }
-                _ => None,
-            }) else {
-                continue;
-            };
-
-            let kb = if self.hold_text.is_empty() {
-                let Some(kb) = stg.get(&key) else {
-                    continue;
-                };
-                kb
-            } else {
-                let Some(kb) = stg.get_hold(&self.hold_text, &key) else {
-                    continue;
-                };
-                kb
-            };
-
             f(kb);
             self.sequence.key.clear();
+        }
+    }
+
+    fn ev_to_kb(&self, ev: &libc::input_event) -> Result<&KeyBind, &'static str> {
+        if ev.type_ != Self::EV_KEY {
+            return Err("Not keyboard");
+        }
+
+        if ev.value != Self::KEY_PRESS && ev.value != Self::KEY_REPEAT {
+            return Err("Not press or hold");
+        }
+
+        let Some(k) = self.key_name(ev.code) else {
+            return Err("Didn't find the key name");
+        };
+
+        let Some(key) = (match ev.value {
+            Self::KEY_RELEASE => {
+                self.holding_table[usize::from(ev.code)] = false;
+                None
+            }
+            Self::KEY_PRESS => {
+                if let Some(holding) = self.holding_table.get(usize::from(ev.code))
+                    && *holding
+                {
+                    return Err("This key is holding, don't process the press.");
+                }
+                let k = self.sequence.push(k);
+                Some(k.to_string())
+            }
+            Self::KEY_REPEAT => {
+                if let Some(holding) = self.holding_table.get(usize::from(ev.code))
+                    && *holding
+                {
+                    return Err("This key is holding, don't process the hold again.");
+                }
+                if let Some(h) = self.holding_table.get_mut(usize::from(ev.code)) {
+                    *h = true;
+                } else {
+                    return Err("Didn't find the key you hold.");
+                }
+
+                self.hold_text.push(k.to_string());
+                None
+            }
+            _ => None,
+        }) else {
+            return Err("ev.value: didn't have this ev value");
+        };
+
+        let stg = Setting::default_new()?;
+        if self.hold_text.is_empty() {
+            let Some(kb) = stg.get(&key) else { return };
+            kb
+        } else {
+            let Some(kb) = stg.get_hold(&self.hold_text, &key) else {
+                continue;
+            };
+            kb
         }
     }
 
