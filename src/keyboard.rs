@@ -127,7 +127,6 @@ impl Keyboard {
                 }
 
                 self.hold_text.push(k.to_string());
-                println!("{:?}", self.hold_text);
                 None
             }
             _ => None,
