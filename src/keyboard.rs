@@ -58,72 +58,93 @@ impl Keyboard {
             file.read_exact(&mut buffer)?;
             let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
 
+            let stg = Setting::default_new()?;
+            let kb = match self.ev_to_kb(&stg, &ev) {
+                Ok(kb) => kb,
+                Err(err) => {
+                    continue;
+                }
+            };
+
             f(kb);
             self.sequence.key.clear();
         }
     }
 
-    fn ev_to_kb(&self, ev: &libc::input_event) -> Result<&KeyBind, &'static str> {
+    fn ev_to_kb<'a>(
+        &mut self,
+        stg: &'a Setting,
+        ev: &libc::input_event,
+    ) -> Result<&'a KeyBind, String> {
         if ev.type_ != Self::EV_KEY {
-            return Err("Not keyboard");
+            return Err(String::from("Not keyboard"));
         }
 
-        if ev.value != Self::KEY_PRESS && ev.value != Self::KEY_REPEAT {
-            return Err("Not press or hold");
-        }
-
-        let Some(k) = self.key_name(ev.code) else {
-            return Err("Didn't find the key name");
+        let Some(k) = Self::key_name(ev.code) else {
+            return Err(String::from("Didn't find the key name"));
         };
 
         let Some(key) = (match ev.value {
             Self::KEY_RELEASE => {
                 self.holding_table[usize::from(ev.code)] = false;
+                if let Some(index) = self.hold_text.iter().position(|item| item == k) {
+                    self.hold_text.remove(index);
+                }
                 None
             }
             Self::KEY_PRESS => {
-                if let Some(holding) = self.holding_table.get(usize::from(ev.code))
-                    && *holding
-                {
-                    return Err("This key is holding, don't process the press.");
+                match self.holding_table.get(usize::from(ev.code)) {
+                    Some(true) => {
+                        return Err(String::from(
+                            "This key is holding, don't process the hold again.",
+                        ));
+                    }
+                    Some(false) => {}
+                    None => {
+                        return Err(String::from("No holding state for this key."));
+                    }
                 }
                 let k = self.sequence.push(k);
                 Some(k.to_string())
             }
             Self::KEY_REPEAT => {
-                if let Some(holding) = self.holding_table.get(usize::from(ev.code))
-                    && *holding
-                {
-                    return Err("This key is holding, don't process the hold again.");
+                match self.holding_table.get(usize::from(ev.code)) {
+                    Some(true) => {
+                        return Err(String::from(
+                            "This key is holding, don't process the hold again.",
+                        ));
+                    }
+                    Some(false) => {}
+                    None => {
+                        return Err(String::from("No holding state for this key."));
+                    }
                 }
+
                 if let Some(h) = self.holding_table.get_mut(usize::from(ev.code)) {
                     *h = true;
                 } else {
-                    return Err("Didn't find the key you hold.");
+                    return Err(String::from("Didn't find the key you hold."));
                 }
 
                 self.hold_text.push(k.to_string());
+                println!("{:?}", self.hold_text);
                 None
             }
             _ => None,
         }) else {
-            return Err("ev.value: didn't have this ev value");
+            return Err(String::from("ev.value: didn't have this ev value"));
         };
-
-        let stg = Setting::default_new()?;
         if self.hold_text.is_empty() {
-            let Some(kb) = stg.get(&key) else { return };
-            kb
+            stg.get(&key)
+                .ok_or_else(|| String::from("Can't find the setting key"))
         } else {
-            let Some(kb) = stg.get_hold(&self.hold_text, &key) else {
-                continue;
-            };
-            kb
+            stg.get_hold(&self.hold_text, &key)
+                .ok_or_else(|| String::from("Can't find the setting key"))
         }
     }
 
     // this follow <https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h>
-    const fn key_name(&self, code: u16) -> Option<&'static str> {
+    const fn key_name(code: u16) -> Option<&'static str> {
         Some(match code {
             1 => "<Esc>",
             2 => "1",
