@@ -1,7 +1,7 @@
 use crate::stg::{KeyBind, Setting};
 use std::error::Error;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::mem::size_of;
 use std::time::{Duration, Instant};
 
@@ -50,22 +50,32 @@ impl Keyboard {
         }
     }
 
+    fn open_keyboard() -> io::Result<File> {
+        let path = fs::read_dir("/dev/input/by-id")?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with("-event-kbd"))
+            })
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, "keyboard event device not found")
+            })?;
+        File::open(path)
+    }
+
     pub fn listener<F: FnMut(&KeyBind)>(&mut self, mut f: F) -> Result<(), Box<dyn Error>> {
-        let mut file = File::open("/dev/input/event3")?; // Need to fix by kb find
+        let mut file = Self::open_keyboard()?;
         let mut buffer = [0u8; size_of::<libc::input_event>()];
 
         loop {
             file.read_exact(&mut buffer)?;
             let ev: libc::input_event = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast()) };
-
             let stg = Setting::default_new()?;
-            let kb = match self.ev_to_kb(&stg, &ev) {
-                Ok(kb) => kb,
-                Err(err) => {
-                    continue;
-                }
+            let Ok(kb) = self.ev_to_kb(&stg, &ev) else {
+                continue;
             };
-
             f(kb);
             self.sequence.key.clear();
         }
