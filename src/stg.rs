@@ -58,7 +58,6 @@ impl Setting {
     pub fn get_hold(&self, hold_text: &[String], key: &str) -> Option<&KeyBind> {
         self.keybinds.iter().find(|k| {
             let parts: Vec<_> = k.key.split('+').collect();
-
             let Some((last_key, holds)) = parts.split_last() else {
                 return false;
             };

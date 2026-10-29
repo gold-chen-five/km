@@ -93,7 +93,6 @@ impl Keyboard {
         let Some(k) = Self::key_name(ev.code) else {
             return Err(String::from("Didn't find the key name"));
         };
-
         let Some(key) = (match ev.value {
             Self::KEY_RELEASE => {
                 self.holding_table[usize::from(ev.code)] = false;
@@ -143,6 +142,7 @@ impl Keyboard {
         }) else {
             return Err(String::from("ev.value: didn't have this ev value"));
         };
+
         if self.hold_text.is_empty() {
             stg.get(&key)
                 .ok_or_else(|| String::from("Can't find the setting key"))
